@@ -139,7 +139,7 @@ if not eia_key:
             "yield curve, seasonality, and supply-demand balance."
         )
     with col3:
-        st.markdown("### 🤖 XGBoost Prediction")
+        st.markdown("### 🤖 CatBoost Prediction")
         st.markdown(
             "Trains a gradient-boosted tree model with walk-forward "
             "validation. Applies predicted change to AAA baseline."
@@ -1007,7 +1007,7 @@ with tab6:
 st.markdown("---")
 st.markdown(
     "<div style='text-align: center; color: #666; font-size: 0.85rem;'>"
-    "⛽ Gas Price Predictor | Data: EIA + Yahoo Finance + FRED | Model: XGBoost<br>"
+    "⛽ Gas Price Predictor | Data: EIA + Yahoo Finance + FRED | Model: CatBoost<br>"
     "Predictions are estimates only — not financial advice. "
     "Actual prices may differ due to unforeseen events.<br>"
     f"Last updated: {datetime.now():%Y-%m-%d %H:%M} | "

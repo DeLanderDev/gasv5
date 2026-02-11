@@ -4,7 +4,7 @@ Ensemble of change-based models with auto-calibrated shrinkage.
 
 Key design decisions:
   1. Predict weekly CHANGE (not absolute price)
-  2. Triple ensemble: XGBoost-full + XGBoost-selected + Ridge
+  2. Triple ensemble: CatBoost-full + CatBoost-selected + Ridge
   3. Auto-calibrated shrinkage: dampens predictions toward zero
      because models consistently over-predict change magnitude.
      Optimized to maximize the ±$0.02 accuracy rate.
@@ -21,14 +21,14 @@ import pandas as pd
 from sklearn.linear_model import Ridge
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.preprocessing import StandardScaler
-from xgboost import XGBRegressor
+from catboost import CatBoostRegressor
 
 from config import (
     METRICS_FILE,
     MIN_TRAINING_WEEKS,
     MODEL_FILE,
     VALIDATION_WEEKS,
-    XGBOOST_PARAMS,
+    CATBOOST_PARAMS,
 )
 from feature_engine import (
     create_features,
@@ -53,9 +53,9 @@ def _sample_weights(n: int, recent_frac: float = 0.4) -> np.ndarray:
 
 
 def _top_features(X, y, names, top_n=35):
-    """Quick XGBoost to rank features, return top N names."""
-    m = XGBRegressor(**{**XGBOOST_PARAMS, "n_estimators": 100})
-    m.fit(X[names], y, verbose=False)
+    """Quick CatBoost to rank features, return top N names."""
+    m = CatBoostRegressor(**{**CATBOOST_PARAMS, "iterations": 100})
+    m.fit(X[names], y)
     fi = pd.Series(m.feature_importances_, index=names)
     return fi.sort_values(ascending=False).head(top_n).index.tolist()
 
@@ -97,8 +97,8 @@ class GasPriceModel:
     Ensemble gas price model predicting weekly CHANGE with shrinkage.
 
     Sub-models:
-      1. XGBoost on all features
-      2. XGBoost on top-35 features (less overfit)
+      1. CatBoost on all features
+      2. CatBoost on top-35 features (less overfit)
       3. Ridge on top-35 features (linear regularized)
 
     Pipeline:
@@ -108,8 +108,8 @@ class GasPriceModel:
     """
 
     def __init__(self):
-        self.xgb_full: Optional[XGBRegressor] = None
-        self.xgb_sel: Optional[XGBRegressor] = None
+        self.cb_full: Optional[CatBoostRegressor] = None
+        self.cb_sel: Optional[CatBoostRegressor] = None
         self.ridge: Optional[Ridge] = None
         self.scaler: Optional[StandardScaler] = None
 
@@ -138,8 +138,8 @@ class GasPriceModel:
 
     def _raw_ensemble(self, X_row):
         """Get raw ensemble change prediction for one or more rows."""
-        p1 = self.xgb_full.predict(X_row[self.all_features])
-        p2 = self.xgb_sel.predict(X_row[self.sel_features])
+        p1 = self.cb_full.predict(X_row[self.all_features])
+        p2 = self.cb_sel.predict(X_row[self.sel_features])
         X_sc = self.scaler.transform(X_row[self.sel_features])
         p3 = self.ridge.predict(X_sc)
         return self.ew[0] * p1 + self.ew[1] * p2 + self.ew[2] * p3
@@ -157,14 +157,14 @@ class GasPriceModel:
         sw = _sample_weights(len(X))
 
         # ── Fit 3 models on ALL data ──────────────────────────────────────
-        self.xgb_full = XGBRegressor(**XGBOOST_PARAMS)
-        self.xgb_full.fit(X, y_chg, sample_weight=sw, verbose=False)
+        self.cb_full = CatBoostRegressor(**CATBOOST_PARAMS)
+        self.cb_full.fit(X, y_chg, sample_weight=sw)
 
         self.sel_features = _top_features(X, y_chg, names, top_n=35)
 
-        self.xgb_sel = XGBRegressor(**XGBOOST_PARAMS)
-        self.xgb_sel.fit(
-            X[self.sel_features], y_chg, sample_weight=sw, verbose=False
+        self.cb_sel = CatBoostRegressor(**CATBOOST_PARAMS)
+        self.cb_sel.fit(
+            X[self.sel_features], y_chg, sample_weight=sw
         )
 
         self.scaler = StandardScaler()
@@ -239,11 +239,11 @@ class GasPriceModel:
             # Fit 3 models
             sel = _top_features(Xtr, ytr, names, top_n=35)
 
-            m1 = XGBRegressor(**XGBOOST_PARAMS)
-            m1.fit(Xtr, ytr, sample_weight=sw, verbose=False)
+            m1 = CatBoostRegressor(**CATBOOST_PARAMS)
+            m1.fit(Xtr, ytr, sample_weight=sw)
 
-            m2 = XGBRegressor(**XGBOOST_PARAMS)
-            m2.fit(Xtr[sel], ytr, sample_weight=sw, verbose=False)
+            m2 = CatBoostRegressor(**CATBOOST_PARAMS)
+            m2.fit(Xtr[sel], ytr, sample_weight=sw)
 
             sc = StandardScaler()
             Xsc = sc.fit_transform(Xtr[sel])
@@ -393,10 +393,10 @@ class GasPriceModel:
             "prediction_date": next_sun.strftime("%Y-%m-%d"),
             "prediction_day": next_sun.strftime("%A, %B %d, %Y"),
             "model_1_change": round(float(
-                self.xgb_full.predict(row[self.all_features])[0]
+                self.cb_full.predict(row[self.all_features])[0]
             ), 5),
             "model_2_change": round(float(
-                self.xgb_sel.predict(row[self.sel_features])[0]
+                self.cb_sel.predict(row[self.sel_features])[0]
             ), 5),
             "model_3_change": round(float(
                 self.ridge.predict(
@@ -408,11 +408,11 @@ class GasPriceModel:
     # ─── Feature Importance ───────────────────────────────────────────────
 
     def get_feature_importance(self, top_n: int = 25) -> pd.DataFrame:
-        if not self.is_trained or self.xgb_full is None:
+        if not self.is_trained or self.cb_full is None:
             return pd.DataFrame()
         fi = pd.DataFrame({
             "feature": self.all_features,
-            "importance": self.xgb_full.feature_importances_,
+            "importance": self.cb_full.feature_importances_,
         }).sort_values("importance", ascending=False)
         return fi.head(top_n)
 
@@ -420,8 +420,8 @@ class GasPriceModel:
 
     def save_model(self):
         MODEL_FILE.parent.mkdir(parents=True, exist_ok=True)
-        if self.xgb_full is not None:
-            self.xgb_full.save_model(str(MODEL_FILE))
+        if self.cb_full is not None:
+            self.cb_full.save_model(str(MODEL_FILE))
         if self.metrics:
             safe = {}
             for k, v in self.metrics.items():
@@ -437,12 +437,12 @@ class GasPriceModel:
     def load_model(self) -> bool:
         if MODEL_FILE.exists() and METRICS_FILE.exists():
             try:
-                self.xgb_full = XGBRegressor()
-                self.xgb_full.load_model(str(MODEL_FILE))
+                self.cb_full = CatBoostRegressor()
+                self.cb_full.load_model(str(MODEL_FILE))
                 with open(METRICS_FILE) as f:
                     self.metrics = json.load(f)
                 self.all_features = list(
-                    self.xgb_full.get_booster().feature_names or []
+                    self.cb_full.feature_names_ or []
                 )
                 self.is_trained = True
                 return True
