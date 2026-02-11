@@ -15,7 +15,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
 
-from config import DEFAULT_HISTORY_YEARS, MIN_DATA_POINTS
+from config import DEFAULT_HISTORY_YEARS, MAX_HISTORY_YEARS, MIN_DATA_POINTS
 from data_collector import build_combined_dataset
 from feature_engine import create_features, get_feature_columns
 from model import GasPriceModel
@@ -90,7 +90,7 @@ with st.sidebar:
     st.subheader("⚙️ Settings")
 
     history_years = st.slider(
-        "History (years)", min_value=2, max_value=10,
+        "History (years)", min_value=2, max_value=MAX_HISTORY_YEARS,
         value=DEFAULT_HISTORY_YEARS,
     )
 
