@@ -14,7 +14,7 @@ DATA_DIR.mkdir(exist_ok=True)
 MODEL_DIR.mkdir(exist_ok=True)
 
 CACHE_FILE = DATA_DIR / "cached_data.parquet"
-MODEL_FILE = MODEL_DIR / "xgb_model.json"
+MODEL_FILE = MODEL_DIR / "cb_model.cbm"
 METRICS_FILE = MODEL_DIR / "metrics.json"
 
 # ─── API Keys ─────────────────────────────────────────────────────────────────
@@ -76,16 +76,16 @@ HURRICANE_PEAK_START_WEEK = 33     # Mid-Aug
 HURRICANE_PEAK_END_WEEK = 42       # Mid-Oct
 
 # ─── Model Settings ──────────────────────────────────────────────────────────
-XGBOOST_PARAMS = {
-    "n_estimators": 300,
-    "max_depth": 4,
+CATBOOST_PARAMS = {
+    "iterations": 300,
+    "depth": 4,
     "learning_rate": 0.05,
     "subsample": 0.8,
-    "colsample_bytree": 0.8,
-    "min_child_weight": 3,
-    "reg_alpha": 0.1,
-    "reg_lambda": 1.0,
-    "random_state": 42,
+    "rsm": 0.8,
+    "l2_leaf_reg": 3.0,
+    "bootstrap_type": "Bernoulli",
+    "random_seed": 42,
+    "verbose": 0,
 }
 
 VALIDATION_WEEKS = 26
