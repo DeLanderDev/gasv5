@@ -21,7 +21,18 @@ import pandas as pd
 from sklearn.linear_model import Ridge
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.preprocessing import StandardScaler
-from catboost import CatBoostRegressor
+try:
+    from catboost import CatBoostRegressor
+except ImportError:
+    import sys
+    raise ImportError(
+        "CatBoost is required but not found in this Python environment.\n"
+        f"  Python executable: {sys.executable}\n"
+        "  Install it with:   pip install catboost>=1.2.0\n"
+        "  Or, if using Streamlit:\n"
+        "    python -m pip install catboost>=1.2.0\n"
+        "    streamlit run app.py"
+    )
 
 from config import (
     METRICS_FILE,
